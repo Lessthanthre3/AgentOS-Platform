@@ -14,6 +14,9 @@ const ticketRoutes = require('../routes/ticketRoutes');
 
 const app = express();
 
+// Trust proxy - required for rate limiting behind reverse proxies
+app.set('trust proxy', 1);
+
 // Connect to MongoDB with retry logic
 const connectWithRetry = async () => {
   try {
@@ -77,7 +80,11 @@ app.use(cors(corsOptions));
 const limiter = rateLimit({
   windowMs: process.env.RATE_LIMIT_WINDOW_MS || 15 * 60 * 1000,
   max: process.env.RATE_LIMIT_MAX || 100,
-  message: 'Too many requests from this IP, please try again later.'
+  message: 'Too many requests from this IP, please try again later.',
+  standardHeaders: true,
+  legacyHeaders: false,
+  // Ensure rate limiter works behind proxy
+  trustProxy: true
 });
 app.use(limiter);
 
