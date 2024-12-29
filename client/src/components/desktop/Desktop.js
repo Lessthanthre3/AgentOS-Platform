@@ -5,7 +5,7 @@ import MatrixRain from '../effects/MatrixRain';
 import Taskbar from './Taskbar';
 import Window from '../windows/Window';
 import AdminPanel from '../admin/AdminPanel';
-import AiAgent from '../apps/AiAgent/AiAgent'; // Fix import path
+import AiAgent from '../apps/AiAgent';
 import NeuralNetwork from '../apps/NeuralNetwork';
 import TokenTracker from '../apps/TokenTracker';
 import SplTracker from '../apps/SplTracker';
@@ -42,7 +42,7 @@ const Desktop = () => {
       case 'admin-panel':
         return AdminPanel;
       case 'ai-agent':
-        return AiAgent; // Fix component reference
+        return AiAgent; 
       case 'neural-network':
         return NeuralNetwork;
       case 'token-tracker':
