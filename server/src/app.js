@@ -60,7 +60,7 @@ app.use(helmet({
 // CORS configuration
 const corsOptions = {
   origin: process.env.NODE_ENV === 'production' 
-    ? ['https://agent-os-platform.vercel.app'] 
+    ? [process.env.ALLOWED_ORIGINS || 'https://agent-os-platform.vercel.app']
     : ['http://localhost:3000'],
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
