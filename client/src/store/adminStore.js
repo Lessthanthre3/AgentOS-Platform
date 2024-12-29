@@ -13,6 +13,9 @@ const useAdminStore = create(
         "4qKmxCGme3oDMbn5EidEJ22cMx1EWAXHsVXPMctCiHwZ",  // Admin Wallet 3
       ],
       
+      adminToken: null,
+      isAdmin: false,
+
       // Token Management
       fetchTokens: async () => {
         try {
@@ -77,6 +80,67 @@ const useAdminStore = create(
         // Temporarily allow all wallets
         return true;
       },
+
+      // Admin Authentication
+      setAdminToken: (token) => 
+        set({ adminToken: token, isAdmin: true }),
+
+      clearAdminToken: () => 
+        set({ adminToken: null, isAdmin: false }),
+
+      getAuthHeaders: () => {
+        const token = get().adminToken;
+        return token ? {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        } : {
+          'Content-Type': 'application/json'
+        };
+      },
+
+      // Admin API Calls
+      createRaffle: async (raffleData) => {
+        try {
+          const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/admin/raffles`, {
+            method: 'POST',
+            headers: get().getAuthHeaders(),
+            body: JSON.stringify(raffleData)
+          });
+
+          if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.message || 'Failed to create raffle');
+          }
+
+          return await response.json();
+        } catch (error) {
+          console.error('Error creating raffle:', error);
+          throw error;
+        }
+      },
+
+      updateRaffle: async (raffleId, raffleData) => {
+        try {
+          const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/admin/raffles/${raffleId}`, {
+            method: 'PUT',
+            headers: get().getAuthHeaders(),
+            body: JSON.stringify(raffleData)
+          });
+
+          if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.message || 'Failed to update raffle');
+          }
+
+          return await response.json();
+        } catch (error) {
+          console.error('Error updating raffle:', error);
+          throw error;
+        }
+      },
+
+      // Utility function to check if user is admin
+      checkIsAdmin: () => get().isAdmin,
 
       // Getters
       getPromotedTokens: () => {

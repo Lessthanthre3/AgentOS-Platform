@@ -1,27 +1,44 @@
+const jwt = require('jsonwebtoken');
+
 const adminAuth = (req, res, next) => {
-  const adminWallet = process.env.ADMIN_WALLET;
-  const walletAddress = req.headers['x-wallet-address'];
+  try {
+    // Get token from Authorization header
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ message: 'No token provided' });
+    }
 
-  // Log for debugging
-  console.log('Admin auth check:', {
-    adminWallet: adminWallet ? 'configured' : 'not configured',
-    requestWallet: walletAddress || 'not provided'
-  });
+    const token = authHeader.split(' ')[1];
+    
+    // Verify token
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key');
+    if (!decoded.isAdmin) {
+      return res.status(403).json({ message: 'Not authorized as admin' });
+    }
 
-  if (!adminWallet) {
-    console.warn('ADMIN_WALLET not configured in environment variables');
-    return res.status(500).json({ message: 'Server configuration error' });
+    // Add admin info to request
+    req.admin = decoded;
+    next();
+  } catch (error) {
+    console.error('Admin auth error:', error);
+    if (error.name === 'JsonWebTokenError') {
+      return res.status(401).json({ message: 'Invalid token' });
+    }
+    res.status(500).json({ message: 'Internal server error' });
   }
-
-  if (!walletAddress) {
-    return res.status(401).json({ message: 'No wallet address provided' });
-  }
-
-  if (walletAddress !== adminWallet) {
-    return res.status(403).json({ message: 'Unauthorized: Admin access required' });
-  }
-
-  next();
 };
 
-module.exports = adminAuth;
+// Generate admin token
+const generateAdminToken = (password) => {
+  if (password !== process.env.ADMIN_PASSWORD) {
+    throw new Error('Invalid admin password');
+  }
+  
+  return jwt.sign(
+    { isAdmin: true },
+    process.env.JWT_SECRET || 'your-secret-key',
+    { expiresIn: '24h' }
+  );
+};
+
+module.exports = { adminAuth, generateAdminToken };
