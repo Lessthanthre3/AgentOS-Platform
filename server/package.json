@@ -6,6 +6,7 @@
   "scripts": {
     "start": "node scripts/start.js",
     "dev": "nodemon src/server.js",
+    "build": "echo 'No build step required'",
     "init-db": "node scripts/init-db.js",
     "test-connection": "node scripts/test-connection.js",
     "create-test-module": "node scripts/create-test-module.js",

@@ -3,9 +3,9 @@ services:
     name: agentos-platform
     env: node
     plan: free # Specify the plan type
-    region: ohio # Choose a region close to your users
-    buildCommand: cd server && npm install
-    startCommand: cd server && npm start
+    region: frankfurt # Choose a region close to your users
+    buildCommand: cd server && yarn install
+    startCommand: cd server && yarn start
     healthCheckPath: /health
     envVars:
       - key: NODE_ENV
