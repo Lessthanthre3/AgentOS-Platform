@@ -1,6 +1,31 @@
+require('dotenv').config();
 const app = require('../src/app');
 const cluster = require('cluster');
 const numCPUs = require('os').cpus().length;
+
+// Ensure we have required environment variables
+const requiredEnvVars = [
+  'MONGODB_URI',
+  'ALLOWED_ORIGINS'
+];
+
+for (const envVar of requiredEnvVars) {
+  if (!process.env[envVar]) {
+    console.error(`Missing required environment variable: ${envVar}`);
+    process.exit(1);
+  }
+}
+
+// Set production environment if not set
+if (!process.env.NODE_ENV) {
+  process.env.NODE_ENV = 'production';
+}
+
+// Log startup information
+console.log('Starting server with configuration:');
+console.log('NODE_ENV:', process.env.NODE_ENV);
+console.log('ALLOWED_ORIGINS:', process.env.ALLOWED_ORIGINS);
+console.log('PORT:', process.env.PORT || 3001);
 
 if (cluster.isMaster) {
   console.log(`Master ${process.pid} is running`);
