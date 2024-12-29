@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Card, Typography, List, ListItem, Chip, Box } from '@mui/material';
-import { useNavigate } from 'react-router-dom';
+import { useRouter } from 'next/router';
 
 const difficultyColors = {
   beginner: 'success',
@@ -10,7 +10,7 @@ const difficultyColors = {
 
 const LearningPath = () => {
   const [modules, setModules] = useState([]);
-  const navigate = useNavigate();
+  const router = useRouter();
 
   useEffect(() => {
     const fetchModules = async () => {
@@ -37,7 +37,7 @@ const LearningPath = () => {
             boxShadow: 6
           }
         }}
-        onClick={() => navigate(`/module/${module.moduleId}`)}
+        onClick={() => router.push(`/module/${module.moduleId}`)}
       >
         <Typography variant="h6">{module.title}</Typography>
         <Typography color="textSecondary" variant="body2">

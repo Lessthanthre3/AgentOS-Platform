@@ -34,6 +34,7 @@ import { useState, useEffect, useCallback } from 'react';
 import useAdminStore from '../../store/adminStore';
 import FeatureFlagManager from './FeatureFlagManager';
 import RaffleAdmin from './RaffleAdmin';
+import { useRouter } from 'next/router';
 
 const TokenModal = ({ isOpen, onClose, token = null, onSave }) => {
   const [formData, setFormData] = useState({
@@ -120,43 +121,82 @@ const TokenModal = ({ isOpen, onClose, token = null, onSave }) => {
 };
 
 const AdminPanel = () => {
-  const store = useAdminStore();
+  const router = useRouter();
   const { isOpen, onOpen, onClose } = useDisclosure();
   const [selectedToken, setSelectedToken] = useState(null);
   const toast = useToast();
+  const [activeTab, setActiveTab] = useState(0);
 
-  const loadTokens = useCallback(async () => {
-    try {
-      if (typeof store.fetchTokens === 'function') {
-        await store.fetchTokens();
-      }
-    } catch (error) {
-      toast({
-        title: 'Error fetching tokens',
-        description: error.message,
-        status: 'error',
-        duration: 3000,
-        isClosable: true,
-      });
-    }
-  }, [store, toast]);
+  const {
+    tokens,
+    addToken,
+    removeToken,
+    updateToken,
+    fetchTokens,
+    getPromotedTokens,
+    isWalletWhitelisted,
+  } = useAdminStore();
 
   useEffect(() => {
-    loadTokens();
-  }, [loadTokens]);
+    if (!isWalletWhitelisted(window.solana?.publicKey?.toString())) {
+      router.push('/');
+      return;
+    }
+    fetchTokens();
+  }, [fetchTokens, isWalletWhitelisted]);
 
-  const handleEdit = (token) => {
+  const handleAddToken = useCallback((token) => {
+    addToken(token);
+    onClose();
+    toast({
+      title: 'Token added.',
+      description: "We've added the token for you.",
+      status: 'success',
+      duration: 5000,
+      isClosable: true,
+    });
+  }, [addToken, onClose, toast]);
+
+  const handleEditToken = useCallback((token) => {
     setSelectedToken(token);
     onOpen();
-  };
+  }, [onOpen]);
+
+  const handleSaveToken = useCallback((token) => {
+    if (selectedToken) {
+      updateToken({ ...token, id: selectedToken.id });
+      toast({
+        title: 'Token updated.',
+        description: "We've updated the token for you.",
+        status: 'success',
+        duration: 5000,
+        isClosable: true,
+      });
+    } else {
+      handleAddToken(token);
+    }
+    setSelectedToken(null);
+    onClose();
+  }, [selectedToken, updateToken, handleAddToken, onClose, toast]);
+
+  const handleDeleteToken = useCallback((tokenId) => {
+    removeToken(tokenId);
+    toast({
+      title: 'Token removed.',
+      description: "We've removed the token for you.",
+      status: 'success',
+      duration: 5000,
+      isClosable: true,
+    });
+  }, [removeToken, toast]);
 
   return (
-    <Box p={4}>
-      <Tabs>
+    <Box p={5}>
+      <Tabs index={activeTab} onChange={setActiveTab}>
         <TabList>
-          <Tab>Tokens</Tab>
-          <Tab><HStack><FaFlag /><Text>Feature Flags</Text></HStack></Tab>
-          <Tab><HStack><FaTicketAlt /><Text>Raffles</Text></HStack></Tab>
+          <Tab>Token Management</Tab>
+          <Tab>Feature Flags</Tab>
+          <Tab>Raffle Management</Tab>
         </TabList>
 
         <TabPanels>
@@ -174,33 +214,35 @@ const AdminPanel = () => {
                     <Th>Name</Th>
                     <Th>Symbol</Th>
                     <Th>Network</Th>
-                    <Th>Featured</Th>
+                    <Th>Address</Th>
                     <Th>Actions</Th>
                   </Tr>
                 </Thead>
                 <Tbody>
-                  {store.tokens.map((token) => (
+                  {tokens.map((token) => (
                     <Tr key={token.id}>
                       <Td>{token.name}</Td>
                       <Td>{token.symbol}</Td>
                       <Td>{token.network}</Td>
                       <Td>
-                        <IconButton
-                          icon={<FaStar />}
-                          colorScheme={token.featured ? "yellow" : "gray"}
-                          onClick={() => store.updateToken({ ...token, featured: !token.featured })}
-                        />
+                        <Text isTruncated maxW="200px">
+                          {token.address}
+                        </Text>
                       </Td>
                       <Td>
                         <HStack spacing={2}>
                           <IconButton
+                            aria-label="Edit token"
                             icon={<FaEdit />}
-                            onClick={() => handleEdit(token)}
+                            size="sm"
+                            onClick={() => handleEditToken(token)}
                           />
                           <IconButton
+                            aria-label="Delete token"
                             icon={<FaTrash />}
+                            size="sm"
                             colorScheme="red"
-                            onClick={() => store.removeToken(token.id)}
+                            onClick={() => handleDeleteToken(token.id)}
                           />
                         </HStack>
                       </Td>
@@ -209,6 +251,13 @@ const AdminPanel = () => {
                 </Tbody>
               </Table>
             </VStack>
+
+            <TokenModal
+              isOpen={isOpen}
+              onClose={onClose}
+              token={selectedToken}
+              onSave={handleSaveToken}
+            />
           </TabPanel>
 
           <TabPanel>
@@ -220,20 +269,6 @@ const AdminPanel = () => {
           </TabPanel>
         </TabPanels>
       </Tabs>
-
-      <TokenModal
-        isOpen={isOpen}
-        onClose={onClose}
-        token={selectedToken}
-        onSave={(token) => {
-          if (token.id) {
-            store.updateToken(token);
-          } else {
-            store.addToken(token);
-          }
-          onClose();
-        }}
-      />
     </Box>
   );
 };

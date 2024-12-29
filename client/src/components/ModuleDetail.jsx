@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useParams } from 'react-router-dom';
+import { useRouter } from 'next/router';
 import {
   Box,
   Typography,
@@ -25,7 +25,8 @@ import {
 } from '@mui/icons-material';
 
 const ModuleDetail = () => {
-  const { moduleId } = useParams();
+  const router = useRouter();
+  const moduleId = router.query.moduleId;
   const [module, setModule] = useState(null);
   const [answers, setAnswers] = useState([]);
   const [results, setResults] = useState(null);
