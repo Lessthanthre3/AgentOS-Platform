@@ -20,7 +20,7 @@ const validateRaffle = [
   body('costPerTicket').isFloat({ min: 0 }).withMessage('Cost per ticket must be positive'),
 ];
 
-// Get all raffles with pagination
+// Get all raffles with pagination (public route)
 router.get('/', async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 1;
@@ -28,11 +28,11 @@ router.get('/', async (req, res) => {
     const skip = (page - 1) * limit;
 
     const [raffles, total] = await Promise.all([
-      Raffle.find()
+      Raffle.find({ status: 'active' }) // Only show active raffles
         .sort({ startDate: -1 })
         .skip(skip)
         .limit(limit),
-      Raffle.countDocuments()
+      Raffle.countDocuments({ status: 'active' })
     ]);
 
     res.json({
@@ -52,10 +52,16 @@ router.get('/', async (req, res) => {
   }
 });
 
-// Get active raffles
+// Get active raffles (public route)
 router.get('/active', async (req, res) => {
   try {
-    const activeRaffles = await Raffle.getActiveRaffles();
+    const now = new Date();
+    const activeRaffles = await Raffle.find({
+      status: 'active',
+      startDate: { $lte: now },
+      endDate: { $gte: now }
+    }).sort({ endDate: 1 });
+    
     res.json(activeRaffles);
   } catch (error) {
     console.error('Error fetching active raffles:', error);
@@ -89,7 +95,8 @@ router.post('/', adminAuth, validateRaffle, async (req, res) => {
       startDate,
       endDate,
       prizeAmount,
-      costPerTicket
+      costPerTicket,
+      status: 'active'
     });
 
     await newRaffle.save();
@@ -103,36 +110,29 @@ router.post('/', adminAuth, validateRaffle, async (req, res) => {
   }
 });
 
-// Complete a raffle (admin only)
-router.post('/:id/complete', adminAuth, async (req, res) => {
+// Update raffle status (admin only)
+router.patch('/:id/status', adminAuth, async (req, res) => {
   try {
-    const { winnerWallet, winningTicket } = req.body;
-    
-    // Verify raffle exists and is active
-    const raffle = await Raffle.findById(req.params.id);
+    const { status } = req.body;
+    if (!['active', 'completed', 'cancelled'].includes(status)) {
+      return res.status(400).json({ message: 'Invalid status' });
+    }
+
+    const raffle = await Raffle.findByIdAndUpdate(
+      req.params.id,
+      { status },
+      { new: true }
+    );
+
     if (!raffle) {
       return res.status(404).json({ message: 'Raffle not found' });
     }
-    
-    if (raffle.status !== 'active') {
-      return res.status(400).json({ message: 'Raffle is not active' });
-    }
-    
-    if (new Date() < raffle.endDate) {
-      return res.status(400).json({ message: 'Raffle has not ended yet' });
-    }
 
-    const updatedRaffle = await Raffle.completeRaffle(
-      req.params.id, 
-      winnerWallet, 
-      winningTicket
-    );
-    
-    res.json(updatedRaffle);
+    res.json(raffle);
   } catch (error) {
-    console.error('Error completing raffle:', error);
+    console.error('Error updating raffle status:', error);
     res.status(500).json({ 
-      message: 'Error completing raffle',
+      message: 'Error updating raffle status',
       error: process.env.NODE_ENV === 'development' ? error.message : undefined 
     });
   }
