@@ -5,8 +5,7 @@ const numCPUs = require('os').cpus().length;
 
 // Ensure we have required environment variables
 const requiredEnvVars = [
-  'MONGODB_URI',
-  'ALLOWED_ORIGINS'
+  'MONGODB_URI'
 ];
 
 for (const envVar of requiredEnvVars) {

@@ -58,9 +58,14 @@ app.use(helmet({
 }));
 
 // CORS configuration
+const defaultOrigins = ['https://agent-os-platform.vercel.app'];
+const allowedOrigins = process.env.ALLOWED_ORIGINS 
+  ? process.env.ALLOWED_ORIGINS.split(',')
+  : defaultOrigins;
+
 const corsOptions = {
   origin: process.env.NODE_ENV === 'production' 
-    ? [process.env.ALLOWED_ORIGINS || 'https://agent-os-platform.vercel.app']
+    ? allowedOrigins
     : ['http://localhost:3000'],
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
