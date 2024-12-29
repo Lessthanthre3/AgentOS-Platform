@@ -116,18 +116,4 @@ app.get('/health', (req, res) => {
   res.status(200).json({ status: 'ok' });
 });
 
-// Start server
-const PORT = process.env.PORT || 3001;
-const HOST = process.env.NODE_ENV === 'production' ? '0.0.0.0' : 'localhost';
-
-app.listen(PORT, HOST, (err) => {
-  if (err) {
-    console.error('Error starting server:', err);
-    return;
-  }
-  console.log(`Server is running on ${HOST}:${PORT}`);
-  console.log(`Environment: ${process.env.NODE_ENV}`);
-  console.log(`CORS allowed origins:`, corsOptions.origin);
-});
-
 module.exports = app;
