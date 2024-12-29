@@ -62,7 +62,7 @@ const Raffle = () => {
 
   const fetchRaffles = async () => {
     try {
-      const updatedRaffles = updateRaffleStatuses();
+      const updatedRaffles = await updateRaffleStatuses();
       
       // Filter raffles by their current status
       const live = updatedRaffles.filter(raffle => getRaffleStatus(raffle) === 'active');

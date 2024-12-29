@@ -13,15 +13,23 @@ export const getRaffleStatus = (raffle) => {
   }
 };
 
-export const updateRaffleStatuses = () => {
-  const allRaffles = JSON.parse(localStorage.getItem('activeRaffles') || '[]');
-  const updatedRaffles = allRaffles.map(raffle => ({
-    ...raffle,
-    status: getRaffleStatus(raffle)
-  }));
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
-  localStorage.setItem('activeRaffles', JSON.stringify(updatedRaffles));
-  return updatedRaffles;
+export const updateRaffleStatuses = async () => {
+  try {
+    const response = await fetch(`${API_URL}/api/raffles`);
+    if (!response.ok) {
+      throw new Error('Failed to fetch raffles');
+    }
+    const raffles = await response.json();
+    return raffles.map(raffle => ({
+      ...raffle,
+      status: getRaffleStatus(raffle)
+    }));
+  } catch (error) {
+    console.error('Error fetching raffles:', error);
+    return [];
+  }
 };
 
 export const filterRafflesByStatus = (raffles, status) => {
