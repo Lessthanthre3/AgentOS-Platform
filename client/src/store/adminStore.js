@@ -1,13 +1,13 @@
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
+import axios from 'axios';
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
 const useAdminStore = create(
   persist(
     (set, get) => ({
-      tokens: [],
-      admins: [],
       whitelistedWallets: [
-        // Admin Wallets
         "25NcM1z7dxbRZE9JptiBVec9XySd8MGCnxZKMvzDP5T5",  // Admin Wallet 1
         "F2NMjJX7xHfKWfgAEv9uATcgx2nabzDFkKtk8szoJASN",  // Admin Wallet 2
         "4qKmxCGme3oDMbn5EidEJ22cMx1EWAXHsVXPMctCiHwZ",  // Admin Wallet 3
@@ -16,103 +16,40 @@ const useAdminStore = create(
       adminToken: null,
       isAdmin: false,
 
-      // Token Management
-      fetchTokens: async () => {
+      // Admin Authentication
+      login: async (password) => {
         try {
-          // For now, we'll just use the existing tokens in the store
-          // In production, this would make an API call to fetch tokens
-          return get().tokens;
+          const response = await axios.post(`${API_URL}/admin/login`, { password });
+          const { token } = response.data;
+          set({ adminToken: token, isAdmin: true });
+          return true;
         } catch (error) {
-          console.error('Error fetching tokens:', error);
-          return [];
+          console.error('Login error:', error);
+          return false;
         }
       },
 
-      addToken: (token) =>
-        set((state) => ({
-          tokens: [...state.tokens, { ...token, id: Date.now().toString() }],
-        })),
-        
-      removeToken: (tokenId) =>
-        set((state) => ({
-          tokens: state.tokens.filter((token) => token.id !== tokenId),
-        })),
-        
-      updateToken: (token) =>
-        set((state) => ({
-          tokens: state.tokens.map((t) =>
-            t.id === token.id ? token : t
-          ),
-        })),
-        
-      // Admin Management
-      addAdmin: (admin) =>
-        set((state) => ({
-          admins: [...state.admins, admin],
-        })),
-        
-      removeAdmin: (adminId) =>
-        set((state) => ({
-          admins: state.admins.filter((admin) => admin.id !== adminId),
-        })),
-        
-      updateAdmin: (adminId, updatedAdmin) =>
-        set((state) => ({
-          admins: state.admins.map((admin) =>
-            admin.id === adminId ? { ...admin, ...updatedAdmin } : admin
-          ),
-        })),
-
-      // Wallet Management
-      addWhitelistedWallet: (walletAddress) =>
-        set((state) => ({
-          whitelistedWallets: [...state.whitelistedWallets, walletAddress],
-        })),
-
-      removeWhitelistedWallet: (walletAddress) =>
-        set((state) => ({
-          whitelistedWallets: state.whitelistedWallets.filter(
-            (address) => address !== walletAddress
-          ),
-        })),
-
-      isWalletWhitelisted: (walletAddress) => {
-        // Temporarily allow all wallets
-        return true;
+      logout: () => {
+        set({ adminToken: null, isAdmin: false });
       },
 
-      // Admin Authentication
-      setAdminToken: (token) => 
-        set({ adminToken: token, isAdmin: true }),
+      // Check if wallet is whitelisted
+      isWalletWhitelisted: (walletAddress) => {
+        return get().whitelistedWallets.includes(walletAddress);
+      },
 
-      clearAdminToken: () => 
-        set({ adminToken: null, isAdmin: false }),
-
+      // Get auth headers for API calls
       getAuthHeaders: () => {
         const token = get().adminToken;
-        return token ? {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        } : {
-          'Content-Type': 'application/json'
-        };
+        return token ? { Authorization: `Bearer ${token}` } : {};
       },
 
-      // Admin API Calls
+      // Raffle Management
       createRaffle: async (raffleData) => {
         try {
-          const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/admin/raffles`, {
-            method: 'POST',
-            headers: get().getAuthHeaders(),
-            body: JSON.stringify(raffleData)
-          });
-
-          if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.message || 'Failed to create raffle');
-          }
-
-          return await response.json();
+          const headers = get().getAuthHeaders();
+          const response = await axios.post(`${API_URL}/raffles`, raffleData, { headers });
+          return response.data;
         } catch (error) {
           console.error('Error creating raffle:', error);
           throw error;
@@ -121,31 +58,41 @@ const useAdminStore = create(
 
       updateRaffle: async (raffleId, raffleData) => {
         try {
-          const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/admin/raffles/${raffleId}`, {
-            method: 'PUT',
-            headers: get().getAuthHeaders(),
-            body: JSON.stringify(raffleData)
-          });
-
-          if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.message || 'Failed to update raffle');
-          }
-
-          return await response.json();
+          const headers = get().getAuthHeaders();
+          const response = await axios.put(`${API_URL}/raffles/${raffleId}`, raffleData, { headers });
+          return response.data;
         } catch (error) {
           console.error('Error updating raffle:', error);
           throw error;
         }
       },
 
-      // Utility function to check if user is admin
-      checkIsAdmin: () => get().isAdmin,
+      deleteRaffle: async (raffleId) => {
+        try {
+          const headers = get().getAuthHeaders();
+          const response = await axios.delete(`${API_URL}/raffles/${raffleId}`, { headers });
+          return response.data;
+        } catch (error) {
+          console.error('Error deleting raffle:', error);
+          throw error;
+        }
+      },
 
-      // Getters
-      getPromotedTokens: () => {
-        const state = get();
-        return state.tokens.filter((token) => token.isPromoted);
+      fetchActiveRaffles: async () => {
+        try {
+          const response = await axios.get(`${API_URL}/raffles/active`);
+          return response.data;
+        } catch (error) {
+          console.error('Error fetching active raffles:', error);
+          throw error;
+        }
+      },
+
+      // Check if user is admin
+      checkIsAdmin: () => {
+        const token = get().adminToken;
+        const isWhitelisted = get().isWalletWhitelisted(window.solana?.publicKey?.toString());
+        return Boolean(token && isWhitelisted);
       },
     }),
     {

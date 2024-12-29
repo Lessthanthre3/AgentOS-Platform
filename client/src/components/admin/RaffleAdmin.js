@@ -36,614 +36,357 @@ import {
   ModalBody,
   ModalFooter,
   ModalCloseButton,
-  Tabs,
-  TabList,
-  Tab,
-  TabPanels,
-  TabPanel,
 } from '@chakra-ui/react';
-import { useWallet } from '@solana/wallet-adapter-react';
-import { updateRaffleStatuses, getRaffleStatus } from '../../utils/raffleUtils';
+import useAdminStore from '../../store/adminStore';
+import { useRouter } from 'next/router';
 
 const RaffleAdmin = () => {
-  const { publicKey } = useWallet();
+  const router = useRouter();
   const toast = useToast();
   const [activeRaffles, setActiveRaffles] = useState([]);
-  const [newRaffle, setNewRaffle] = useState({
+  const [loading, setLoading] = useState(false);
+  const [raffleToDelete, setRaffleToDelete] = useState(null);
+  const [loginPassword, setLoginPassword] = useState('');
+  const { isOpen: isDeleteOpen, onOpen: onDeleteOpen, onClose: onDeleteClose } = useDisclosure();
+  const { isOpen: isLoginOpen, onOpen: onLoginOpen, onClose: onLoginClose } = useDisclosure();
+  const cancelRef = useRef();
+
+  const {
+    login,
+    logout,
+    isAdmin,
+    checkIsAdmin,
+    createRaffle,
+    updateRaffle,
+    deleteRaffle,
+    fetchActiveRaffles,
+    isWalletWhitelisted,
+  } = useAdminStore();
+
+  const [formData, setFormData] = useState({
     name: '',
-    ticketAmount: 100,
-    costPerTicket: 0.1,
+    description: '',
     startDate: '',
     endDate: '',
+    prizeAmount: '',
+    costPerTicket: '',
   });
-  
-  // For delete confirmation
-  const { isOpen: isDeleteOpen, onOpen: onDeleteOpen, onClose: onDeleteClose } = useDisclosure();
-  const [raffleToDelete, setRaffleToDelete] = useState(null);
-  
-  // For winner selection modal
-  const { isOpen: isWinnerOpen, onOpen: onWinnerOpen, onClose: onWinnerClose } = useDisclosure();
-  const [selectedRaffle, setSelectedRaffle] = useState(null);
-  const [winnerInfo, setWinnerInfo] = useState(null);
 
-  // For transaction ID prompt
-  const [txIdPromptIsOpen, setTxIdPromptIsOpen] = useState(false);
-  const [selectedRaffleForTx, setSelectedRaffleForTx] = useState(null);
-  const [txId, setTxId] = useState('');
-  const txIdCancelRef = useRef();
-
-  // Update status check to use utility functions
   useEffect(() => {
-    const checkRaffleStatus = () => {
-      const updatedRaffles = updateRaffleStatuses();
-      setActiveRaffles(updatedRaffles);
+    const checkAdmin = async () => {
+      if (!checkIsAdmin()) {
+        onLoginOpen();
+      }
     };
+    checkAdmin();
+  }, [checkIsAdmin]);
 
-    // Initial check
-    checkRaffleStatus();
+  useEffect(() => {
+    if (isAdmin) {
+      fetchRaffles();
+    }
+  }, [isAdmin]);
 
-    // Set up periodic checks
-    const interval = setInterval(checkRaffleStatus, 10000);
-    return () => clearInterval(interval);
-  }, []);
-
-  const handleDeleteClick = (raffle) => {
-    setRaffleToDelete(raffle);
-    onDeleteOpen();
-  };
-
-  const handleDeleteConfirm = () => {
-    if (!raffleToDelete) return;
-    
+  const fetchRaffles = async () => {
     try {
-      // Get current raffles
-      const updatedRaffles = activeRaffles.filter(raffle => raffle.id !== raffleToDelete.id);
-      setActiveRaffles(updatedRaffles);
-      localStorage.setItem('activeRaffles', JSON.stringify(updatedRaffles));
-
-      toast({
-        title: 'Success',
-        description: 'Raffle deleted successfully',
-        status: 'success',
-        duration: 3000,
-      });
+      setLoading(true);
+      const raffles = await fetchActiveRaffles();
+      setActiveRaffles(raffles);
     } catch (error) {
       toast({
-        title: 'Error',
-        description: 'Failed to delete raffle',
+        title: 'Error fetching raffles',
+        description: error.message,
         status: 'error',
-        duration: 3000,
+        duration: 5000,
+        isClosable: true,
       });
-    }
-    
-    onDeleteClose();
-    setRaffleToDelete(null);
-  };
-
-  const selectWinner = (raffle) => {
-    setSelectedRaffle(raffle);
-    
-    // Get all tickets for this raffle
-    const allStorageKeys = Object.keys(localStorage);
-    const ticketKeys = allStorageKeys.filter(key => key.startsWith('tickets_'));
-    let allTickets = [];
-    
-    ticketKeys.forEach(key => {
-      const userTickets = JSON.parse(localStorage.getItem(key) || '[]');
-      const raffleTickets = userTickets.filter(ticket => ticket.raffleId === raffle.id);
-      allTickets = [...allTickets, ...raffleTickets];
-    });
-
-    if (allTickets.length === 0) {
-      toast({
-        title: 'No participants',
-        description: 'No tickets were purchased for this raffle',
-        status: 'warning',
-        duration: 3000,
-      });
-      return;
-    }
-
-    // Randomly select winner
-    const winningTicket = allTickets[Math.floor(Math.random() * allTickets.length)];
-    setWinnerInfo(winningTicket);
-
-    // Update raffle with winner
-    const updatedRaffles = activeRaffles.map(r => {
-      if (r.id === raffle.id) {
-        return {
-          ...r,
-          winner: winningTicket.userAddress,
-          winningTicket: winningTicket.ticketId,
-        };
-      }
-      return r;
-    });
-
-    setActiveRaffles(updatedRaffles);
-    localStorage.setItem('activeRaffles', JSON.stringify(updatedRaffles));
-    onWinnerOpen();
-  };
-
-  const handleRaffleStatusToggle = (raffleId) => {
-    const updatedRaffles = activeRaffles.map(raffle => {
-      if (raffle.id === raffleId) {
-        // If raffle is pending, start it immediately
-        if (getRaffleStatus(raffle) === 'pending') {
-          return {
-            ...raffle,
-            startDate: new Date().toISOString(),
-            status: 'active'
-          };
-        }
-        // If raffle is active, end it immediately
-        else if (getRaffleStatus(raffle) === 'active') {
-          return {
-            ...raffle,
-            endDate: new Date().toISOString(),
-            status: 'ended'
-          };
-        }
-      }
-      return raffle;
-    });
-
-    setActiveRaffles(updatedRaffles);
-    localStorage.setItem('activeRaffles', JSON.stringify(updatedRaffles));
-
-    toast({
-      title: 'Success',
-      description: `Raffle status updated`,
-      status: 'success',
-      duration: 3000,
-    });
-  };
-
-  const handlePaymentStatusToggle = (raffle) => {
-    if (raffle.paymentStatus === 'unpaid') {
-      setSelectedRaffleForTx(raffle);
-      setTxIdPromptIsOpen(true);
-    } else {
-      // If changing from paid to unpaid, just remove the tx
-      const updatedRaffles = activeRaffles.map(r => {
-        if (r.id === raffle.id) {
-          const { transactionId, ...rest } = r;
-          return {
-            ...rest,
-            paymentStatus: 'unpaid'
-          };
-        }
-        return r;
-      });
-
-      setActiveRaffles(updatedRaffles);
-      localStorage.setItem('activeRaffles', JSON.stringify(updatedRaffles));
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleTxIdSubmit = () => {
-    if (!txId.trim()) {
-      toast({
-        title: 'Error',
-        description: 'Please enter a valid transaction ID',
-        status: 'error',
-        duration: 3000,
-      });
-      return;
-    }
-
-    const updatedRaffles = activeRaffles.map(raffle => {
-      if (raffle.id === selectedRaffleForTx.id) {
-        return {
-          ...raffle,
-          paymentStatus: 'paid',
-          transactionId: txId.trim()
-        };
-      }
-      return raffle;
-    });
-
-    setActiveRaffles(updatedRaffles);
-    localStorage.setItem('activeRaffles', JSON.stringify(updatedRaffles));
-    setTxIdPromptIsOpen(false);
-    setTxId('');
-    setSelectedRaffleForTx(null);
-
-    toast({
-      title: 'Payment Status Updated',
-      description: 'Payment verified with transaction ID',
-      status: 'success',
-      duration: 3000,
-    });
-  };
-
-  const handleInputChange = (field, value) => {
-    setNewRaffle((prev) => ({
-      ...prev,
-      [field]: value,
-    }));
-  };
-
-  const handleCreateRaffle = async () => {
+  const handleLogin = async () => {
     try {
-      // Validate inputs
-      if (!newRaffle.name || !newRaffle.ticketAmount || !newRaffle.startDate || !newRaffle.endDate) {
+      const success = await login(loginPassword);
+      if (success) {
+        onLoginClose();
+        await fetchRaffles();
+      } else {
         toast({
-          title: 'Validation Error',
-          description: 'Please fill in all fields',
+          title: 'Login failed',
+          description: 'Invalid password',
           status: 'error',
-          duration: 3000,
+          duration: 5000,
+          isClosable: true,
         });
-        return;
       }
+    } catch (error) {
+      toast({
+        title: 'Login error',
+        description: error.message,
+        status: 'error',
+        duration: 5000,
+        isClosable: true,
+      });
+    }
+  };
 
-      const startDate = new Date(newRaffle.startDate);
-      const endDate = new Date(newRaffle.endDate);
-      const now = new Date();
+  const handleInputChange = (e) => {
+    const { name, value } = e.target;
+    setFormData((prev) => ({ ...prev, [name]: value }));
+  };
 
-      if (endDate <= startDate) {
-        toast({
-          title: 'Validation Error',
-          description: 'End date must be after start date',
-          status: 'error',
-          duration: 3000,
-        });
-        return;
-      }
+  const handleNumberInputChange = (name, value) => {
+    setFormData((prev) => ({ ...prev, [name]: value }));
+  };
 
-      // Create new raffle object
-      const raffleData = {
-        ...newRaffle,
-        id: Date.now().toString(),
-        createdBy: publicKey.toString(),
-        status: startDate <= now ? 'active' : 'pending',
-        ticketsSold: 0,
-        createdAt: new Date().toISOString(),
-        paymentStatus: 'unpaid',
-      };
-
-      // Add to active raffles and save to localStorage
-      const updatedRaffles = [...activeRaffles, raffleData];
-      setActiveRaffles(updatedRaffles);
-      localStorage.setItem('activeRaffles', JSON.stringify(updatedRaffles));
-
-      // Reset form
-      setNewRaffle({
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      setLoading(true);
+      await createRaffle(formData);
+      await fetchRaffles();
+      setFormData({
         name: '',
-        ticketAmount: 100,
-        costPerTicket: 0.1,
+        description: '',
         startDate: '',
         endDate: '',
+        prizeAmount: '',
+        costPerTicket: '',
       });
-
       toast({
         title: 'Success',
         description: 'Raffle created successfully',
         status: 'success',
-        duration: 3000,
+        duration: 5000,
+        isClosable: true,
       });
     } catch (error) {
       toast({
-        title: 'Error',
-        description: 'Failed to create raffle',
+        title: 'Error creating raffle',
+        description: error.message,
         status: 'error',
-        duration: 3000,
+        duration: 5000,
+        isClosable: true,
       });
+    } finally {
+      setLoading(false);
     }
   };
 
-  const calculatePrizePool = (raffle) => {
-    return (raffle.ticketsSold || 0) * raffle.costPerTicket;
+  const handleDelete = async () => {
+    try {
+      setLoading(true);
+      await deleteRaffle(raffleToDelete._id);
+      await fetchRaffles();
+      setRaffleToDelete(null);
+      onDeleteClose();
+      toast({
+        title: 'Success',
+        description: 'Raffle deleted successfully',
+        status: 'success',
+        duration: 5000,
+        isClosable: true,
+      });
+    } catch (error) {
+      toast({
+        title: 'Error deleting raffle',
+        description: error.message,
+        status: 'error',
+        duration: 5000,
+        isClosable: true,
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
+  if (!isWalletWhitelisted(window.solana?.publicKey?.toString())) {
+    router.push('/');
+    return null;
+  }
+
   return (
-    <Box p={4}>
-      <VStack spacing={6} align="stretch">
-        <Heading size="md">Create New Raffle</Heading>
-        
-        <FormControl isRequired>
-          <FormLabel>Raffle Name</FormLabel>
-          <Input
-            value={newRaffle.name}
-            onChange={(e) => handleInputChange('name', e.target.value)}
-            placeholder="Enter raffle name"
-          />
-        </FormControl>
+    <Box p={5}>
+      <VStack spacing={8} align="stretch">
+        <Heading>Raffle Admin Panel</Heading>
 
-        <FormControl isRequired>
-          <FormLabel>Number of Tickets</FormLabel>
-          <NumberInput
-            value={newRaffle.ticketAmount}
-            onChange={(value) => handleInputChange('ticketAmount', parseInt(value))}
-            min={1}
-            max={10000}
-          >
-            <NumberInputField />
-            <NumberInputStepper>
-              <NumberIncrementStepper />
-              <NumberDecrementStepper />
-            </NumberInputStepper>
-          </NumberInput>
-        </FormControl>
+        {/* Create Raffle Form */}
+        <Box as="form" onSubmit={handleSubmit}>
+          <VStack spacing={4} align="stretch">
+            <FormControl isRequired>
+              <FormLabel>Name</FormLabel>
+              <Input
+                name="name"
+                value={formData.name}
+                onChange={handleInputChange}
+              />
+            </FormControl>
 
-        <FormControl isRequired>
-          <FormLabel>Cost per Ticket (SOL)</FormLabel>
-          <NumberInput
-            value={newRaffle.costPerTicket}
-            onChange={(value) => handleInputChange('costPerTicket', parseFloat(value))}
-            min={0.1}
-            max={10}
-            step={0.1}
-            precision={2}
-          >
-            <NumberInputField />
-            <NumberInputStepper>
-              <NumberIncrementStepper />
-              <NumberDecrementStepper />
-            </NumberInputStepper>
-          </NumberInput>
-        </FormControl>
+            <FormControl isRequired>
+              <FormLabel>Description</FormLabel>
+              <Input
+                name="description"
+                value={formData.description}
+                onChange={handleInputChange}
+              />
+            </FormControl>
 
-        <FormControl isRequired>
-          <FormLabel>Start Date</FormLabel>
-          <Input
-            type="datetime-local"
-            value={newRaffle.startDate}
-            onChange={(e) => handleInputChange('startDate', e.target.value)}
-          />
-        </FormControl>
-
-        <FormControl isRequired>
-          <FormLabel>End Date</FormLabel>
-          <Input
-            type="datetime-local"
-            value={newRaffle.endDate}
-            onChange={(e) => handleInputChange('endDate', e.target.value)}
-          />
-        </FormControl>
-
-        <Button colorScheme="green" onClick={handleCreateRaffle}>
-          Create Raffle
-        </Button>
-
-        <Tabs>
-          <TabList>
-            <Tab>Active Raffles</Tab>
-            <Tab>Previous Winners</Tab>
-          </TabList>
-
-          <TabPanels>
-            <TabPanel>
-              <Table variant="simple">
-                <Thead>
-                  <Tr>
-                    <Th>Name</Th>
-                    <Th>Tickets</Th>
-                    <Th>Cost (SOL)</Th>
-                    <Th>Prize Pool</Th>
-                    <Th>Start Date</Th>
-                    <Th>End Date</Th>
-                    <Th>Status</Th>
-                    <Th>Winner</Th>
-                    <Th>Actions</Th>
-                  </Tr>
-                </Thead>
-                <Tbody>
-                  {activeRaffles.map((raffle) => {
-                    const currentStatus = getRaffleStatus(raffle);
-                    return (
-                      <Tr key={raffle.id}>
-                        <Td>{raffle.name}</Td>
-                        <Td>{raffle.ticketAmount}</Td>
-                        <Td>{raffle.costPerTicket}</Td>
-                        <Td>{calculatePrizePool(raffle)} SOL</Td>
-                        <Td>{new Date(raffle.startDate).toLocaleString()}</Td>
-                        <Td>{new Date(raffle.endDate).toLocaleString()}</Td>
-                        <Td>
-                          <Badge
-                            colorScheme={
-                              currentStatus === 'active' ? 'green' : 
-                              currentStatus === 'ended' ? 'red' : 'yellow'
-                            }
-                          >
-                            {currentStatus.toUpperCase()}
-                          </Badge>
-                        </Td>
-                        <Td>
-                          {raffle.winner ? (
-                            <Text fontSize="sm" isTruncated maxW="150px">
-                              {raffle.winner.slice(0, 6)}...{raffle.winner.slice(-4)}
-                            </Text>
-                          ) : (
-                            'Not drawn'
-                          )}
-                        </Td>
-                        <Td>
-                          <HStack spacing={2}>
-                            {currentStatus === 'ended' && !raffle.winner && (
-                              <Button
-                                size="sm"
-                                colorScheme="blue"
-                                onClick={() => selectWinner(raffle)}
-                              >
-                                Draw Winner
-                              </Button>
-                            )}
-                            <Button
-                              size="sm"
-                              colorScheme={currentStatus === 'active' ? 'red' : 'green'}
-                              onClick={() => handleRaffleStatusToggle(raffle.id)}
-                              isDisabled={currentStatus === 'ended' || raffle.winner !== undefined}
-                            >
-                              {currentStatus === 'active' ? 'End' : 'Start'}
-                            </Button>
-                            <Button
-                              size="sm"
-                              colorScheme="red"
-                              variant="outline"
-                              onClick={() => handleDeleteClick(raffle)}
-                              isDisabled={currentStatus === 'active'}
-                            >
-                              Delete
-                            </Button>
-                          </HStack>
-                        </Td>
-                      </Tr>
-                    );
-                  })}
-                </Tbody>
-              </Table>
-            </TabPanel>
-
-            <TabPanel>
-              <Table variant="simple">
-                <Thead>
-                  <Tr>
-                    <Th>Raffle Name</Th>
-                    <Th>End Date</Th>
-                    <Th>Prize Amount</Th>
-                    <Th>Winner</Th>
-                    <Th>Payment Status</Th>
-                    <Th>Actions</Th>
-                  </Tr>
-                </Thead>
-                <Tbody>
-                  {activeRaffles
-                    .filter(raffle => raffle.winner && getRaffleStatus(raffle) === 'ended')
-                    .map((raffle) => (
-                      <Tr key={raffle.id}>
-                        <Td>{raffle.name}</Td>
-                        <Td>{new Date(raffle.endDate).toLocaleString()}</Td>
-                        <Td>{calculatePrizePool(raffle)} SOL</Td>
-                        <Td>
-                          <Text fontSize="sm" isTruncated maxW="150px">
-                            {raffle.winner.slice(0, 6)}...{raffle.winner.slice(-4)}
-                          </Text>
-                        </Td>
-                        <Td>
-                          <Badge
-                            colorScheme={raffle.paymentStatus === 'paid' ? 'green' : 'red'}
-                            cursor="pointer"
-                            onClick={() => handlePaymentStatusToggle(raffle)}
-                          >
-                            {raffle.paymentStatus === 'paid' ? 'Paid' : 'Not Paid'}
-                          </Badge>
-                        </Td>
-                        <Td>
-                          <Button
-                            size="sm"
-                            colorScheme="red"
-                            variant="outline"
-                            onClick={() => handleDeleteClick(raffle)}
-                          >
-                            Delete
-                          </Button>
-                        </Td>
-                      </Tr>
-                    ))}
-                </Tbody>
-              </Table>
-            </TabPanel>
-          </TabPanels>
-        </Tabs>
-
-        {/* Delete Confirmation Dialog */}
-        <AlertDialog
-          isOpen={isDeleteOpen}
-          leastDestructiveRef={undefined}
-          onClose={onDeleteClose}
-        >
-          <AlertDialogOverlay>
-            <AlertDialogContent>
-              <AlertDialogHeader fontSize="lg" fontWeight="bold">
-                Delete Raffle
-              </AlertDialogHeader>
-
-              <AlertDialogBody>
-                Are you sure you want to delete this raffle? This action cannot be undone.
-                {raffleToDelete?.status === 'ended' && (
-                  <Text color="red.500" mt={2}>
-                    Warning: Make sure all prizes have been distributed before deleting an ended raffle.
-                  </Text>
-                )}
-              </AlertDialogBody>
-
-              <AlertDialogFooter>
-                <Button onClick={onDeleteClose}>
-                  Cancel
-                </Button>
-                <Button colorScheme="red" onClick={handleDeleteConfirm} ml={3}>
-                  Delete
-                </Button>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialogOverlay>
-        </AlertDialog>
-
-        {/* Winner Selection Modal */}
-        <Modal isOpen={isWinnerOpen} onClose={onWinnerClose}>
-          <ModalOverlay />
-          <ModalContent>
-            <ModalHeader>Raffle Winner</ModalHeader>
-            <ModalCloseButton />
-            <ModalBody>
-              {winnerInfo && (
-                <VStack align="stretch" spacing={3}>
-                  <Text><strong>Winning Ticket:</strong> #{winnerInfo.ticketId}</Text>
-                  <Text><strong>Winner Address:</strong> {winnerInfo.userAddress}</Text>
-                  <Text><strong>Prize Amount:</strong> {selectedRaffle ? calculatePrizePool(selectedRaffle) : 0} SOL</Text>
-                </VStack>
-              )}
-            </ModalBody>
-            <ModalFooter>
-              <Button colorScheme="blue" mr={3} onClick={onWinnerClose}>
-                Close
-              </Button>
-            </ModalFooter>
-          </ModalContent>
-        </Modal>
-
-        {/* Transaction ID Prompt */}
-        <AlertDialog
-          isOpen={txIdPromptIsOpen}
-          leastDestructiveRef={txIdCancelRef}
-          onClose={() => {
-            setTxIdPromptIsOpen(false);
-            setTxId('');
-            setSelectedRaffleForTx(null);
-          }}
-        >
-          <AlertDialogOverlay>
-            <AlertDialogContent>
-              <AlertDialogHeader fontSize="lg" fontWeight="bold">
-                Enter Transaction ID
-              </AlertDialogHeader>
-
-              <AlertDialogBody>
-                <Text mb={4}>Please enter the Solana transaction ID for payment verification:</Text>
+            <HStack spacing={4}>
+              <FormControl isRequired>
+                <FormLabel>Start Date</FormLabel>
                 <Input
-                  value={txId}
-                  onChange={(e) => setTxId(e.target.value)}
-                  placeholder="Enter transaction ID"
+                  name="startDate"
+                  type="datetime-local"
+                  value={formData.startDate}
+                  onChange={handleInputChange}
                 />
-              </AlertDialogBody>
+              </FormControl>
 
-              <AlertDialogFooter>
-                <Button ref={txIdCancelRef} onClick={() => {
-                  setTxIdPromptIsOpen(false);
-                  setTxId('');
-                  setSelectedRaffleForTx(null);
-                }}>
-                  Cancel
-                </Button>
-                <Button colorScheme="green" onClick={handleTxIdSubmit} ml={3}>
-                  Verify Payment
-                </Button>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialogOverlay>
-        </AlertDialog>
+              <FormControl isRequired>
+                <FormLabel>End Date</FormLabel>
+                <Input
+                  name="endDate"
+                  type="datetime-local"
+                  value={formData.endDate}
+                  onChange={handleInputChange}
+                />
+              </FormControl>
+            </HStack>
+
+            <HStack spacing={4}>
+              <FormControl isRequired>
+                <FormLabel>Prize Amount</FormLabel>
+                <NumberInput
+                  min={0}
+                  value={formData.prizeAmount}
+                  onChange={(value) => handleNumberInputChange('prizeAmount', value)}
+                >
+                  <NumberInputField />
+                  <NumberInputStepper>
+                    <NumberIncrementStepper />
+                    <NumberDecrementStepper />
+                  </NumberInputStepper>
+                </NumberInput>
+              </FormControl>
+
+              <FormControl isRequired>
+                <FormLabel>Cost Per Ticket</FormLabel>
+                <NumberInput
+                  min={0}
+                  value={formData.costPerTicket}
+                  onChange={(value) => handleNumberInputChange('costPerTicket', value)}
+                >
+                  <NumberInputField />
+                  <NumberInputStepper>
+                    <NumberIncrementStepper />
+                    <NumberDecrementStepper />
+                  </NumberInputStepper>
+                </NumberInput>
+              </FormControl>
+            </HStack>
+
+            <Button
+              type="submit"
+              colorScheme="blue"
+              isLoading={loading}
+              loadingText="Creating..."
+            >
+              Create Raffle
+            </Button>
+          </VStack>
+        </Box>
+
+        {/* Active Raffles Table */}
+        <Box>
+          <Heading size="md" mb={4}>Active Raffles</Heading>
+          <Table variant="simple">
+            <Thead>
+              <Tr>
+                <Th>Name</Th>
+                <Th>Description</Th>
+                <Th>Start Date</Th>
+                <Th>End Date</Th>
+                <Th>Prize Amount</Th>
+                <Th>Cost Per Ticket</Th>
+                <Th>Actions</Th>
+              </Tr>
+            </Thead>
+            <Tbody>
+              {activeRaffles.map((raffle) => (
+                <Tr key={raffle._id}>
+                  <Td>{raffle.name}</Td>
+                  <Td>{raffle.description}</Td>
+                  <Td>{new Date(raffle.startDate).toLocaleString()}</Td>
+                  <Td>{new Date(raffle.endDate).toLocaleString()}</Td>
+                  <Td>{raffle.prizeAmount}</Td>
+                  <Td>{raffle.costPerTicket}</Td>
+                  <Td>
+                    <Button
+                      colorScheme="red"
+                      size="sm"
+                      onClick={() => {
+                        setRaffleToDelete(raffle);
+                        onDeleteOpen();
+                      }}
+                    >
+                      Delete
+                    </Button>
+                  </Td>
+                </Tr>
+              ))}
+            </Tbody>
+          </Table>
+        </Box>
       </VStack>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog
+        isOpen={isDeleteOpen}
+        leastDestructiveRef={cancelRef}
+        onClose={onDeleteClose}
+      >
+        <AlertDialogOverlay>
+          <AlertDialogContent>
+            <AlertDialogHeader>Delete Raffle</AlertDialogHeader>
+            <AlertDialogBody>
+              Are you sure you want to delete this raffle? This action cannot be undone.
+            </AlertDialogBody>
+            <AlertDialogFooter>
+              <Button ref={cancelRef} onClick={onDeleteClose}>
+                Cancel
+              </Button>
+              <Button colorScheme="red" onClick={handleDelete} ml={3}>
+                Delete
+              </Button>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialogOverlay>
+      </AlertDialog>
+
+      {/* Login Modal */}
+      <Modal isOpen={isLoginOpen} onClose={onLoginClose}>
+        <ModalOverlay />
+        <ModalContent>
+          <ModalHeader>Admin Login</ModalHeader>
+          <ModalCloseButton />
+          <ModalBody>
+            <FormControl>
+              <FormLabel>Password</FormLabel>
+              <Input
+                type="password"
+                value={loginPassword}
+                onChange={(e) => setLoginPassword(e.target.value)}
+              />
+            </FormControl>
+          </ModalBody>
+          <ModalFooter>
+            <Button colorScheme="blue" onClick={handleLogin}>
+              Login
+            </Button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
     </Box>
   );
 };
