@@ -1,0 +1,18 @@
+{
+  "name": "agentos-platform",
+  "version": "1.0.0",
+  "description": "AgentOS Platform with parallel development environment",
+  "scripts": {
+    "dev": "node scripts/start-parallel-dev.js",
+    "dev:main": "concurrently \"cd client && npm run dev\" \"cd server && npm run dev\"",
+    "dev:beta": "cross-env PORT=3002 concurrently \"cd client && npm run dev\" \"cd server && npm run dev\"",
+    "install:all": "npm install && cd client && npm install && cd ../server && npm install"
+  },
+  "dependencies": {
+    "concurrently": "^8.2.2",
+    "cross-env": "^7.0.3"
+  },
+  "devDependencies": {
+    "dotenv": "^16.3.1"
+  }
+}

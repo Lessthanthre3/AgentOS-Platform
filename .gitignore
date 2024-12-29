@@ -1,0 +1,51 @@
+# Dependencies
+**/node_modules
+**/package-lock.json
+**/yarn.lock
+
+# Environment
+**/.env
+**/.env.local
+**/.env.development
+**/.env.test
+**/.env.production
+
+# Build outputs
+**/dist
+**/build
+**/.next
+**/.nuxt
+**/out
+
+# Solana/Anchor
+**/.anchor
+**/target
+**/*.so
+**/*.dylib
+**/*.dll
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Logs
+**/npm-debug.log*
+**/yarn-debug.log*
+**/yarn-error.log*
+**/debug.log
+
+# System files
+.DS_Store
+Thumbs.db
+
+# Testing
+**/coverage
+**/.nyc_output
+
+# Neural Network specific
+**/models/saved_models
+**/__pycache__
+**/*.pyc
+**/venv

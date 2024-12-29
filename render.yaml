@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: agentos-platform
+    env: node
+    plan: free # Specify the plan type
+    region: ohio # Choose a region close to your users
+    buildCommand: cd server && npm install
+    startCommand: cd server && npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: MONGODB_URI
+        sync: false # Will be set manually in Render dashboard
+      - key: ADMIN_WALLET
+        sync: false
+      - key: RATE_LIMIT_MAX
+        value: 100
+      - key: RATE_LIMIT_WINDOW_MS
+        value: 900000
+    autoDeploy: true # Enable auto-deployment
+    domains:
+      - agentos-platform.onrender.com # This will be your default domain
