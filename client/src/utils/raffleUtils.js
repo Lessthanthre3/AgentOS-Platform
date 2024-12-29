@@ -17,21 +17,31 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
 export const updateRaffleStatuses = async () => {
   try {
+    console.log('Fetching raffles from:', `${API_URL}/api/raffles`);
     const response = await fetch(`${API_URL}/api/raffles`);
+    console.log('Response status:', response.status);
+    
     if (!response.ok) {
-      throw new Error('Failed to fetch raffles');
+      const errorText = await response.text();
+      console.error('Failed to fetch raffles:', errorText);
+      throw new Error(`Failed to fetch raffles: ${response.status} ${errorText}`);
     }
+    
     const data = await response.json();
+    console.log('Fetched raffles:', data);
     
     // Handle both paginated and non-paginated responses
     const raffles = data.raffles || data;
     
-    return raffles.map(raffle => ({
+    const processedRaffles = raffles.map(raffle => ({
       ...raffle,
       status: getRaffleStatus(raffle)
     }));
+    
+    console.log('Processed raffles:', processedRaffles);
+    return processedRaffles;
   } catch (error) {
-    console.error('Error fetching raffles:', error);
+    console.error('Error in updateRaffleStatuses:', error);
     return [];
   }
 };
