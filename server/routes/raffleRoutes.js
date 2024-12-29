@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const Raffle = require('../models/Raffle');
-const adminAuth = require('../middleware/adminAuth');
+const { adminAuth } = require('../middleware/adminAuth');
 const { body, validationResult } = require('express-validator');
 
 // Validation middleware
