@@ -40,25 +40,45 @@ const Raffle = () => {
   const { connected, publicKey } = useWallet();
   const [liveRaffles, setLiveRaffles] = useState([]);
   const [endedRaffles, setEndedRaffles] = useState([]);
+  const [userTickets, setUserTickets] = useState({});
   const toast = useToast();
 
+  // Fetch raffles regardless of wallet connection
   useEffect(() => {
-    if (!connected) {
-      toast({
-        title: 'Wallet not connected',
-        description: 'Please connect your wallet to view raffles',
-        status: 'warning',
-        duration: 5000,
-        isClosable: true,
-      });
-      return;
-    }
-
     fetchRaffles();
     // Set up periodic status updates
     const interval = setInterval(fetchRaffles, 10000); // Check every 10 seconds
     return () => clearInterval(interval);
-  }, [connected]);
+  }, []);
+
+  // Fetch user's tickets when wallet is connected
+  useEffect(() => {
+    if (connected && publicKey) {
+      fetchUserTickets();
+    } else {
+      setUserTickets({});
+    }
+  }, [connected, publicKey]);
+
+  const fetchUserTickets = async () => {
+    if (!publicKey) return;
+    
+    try {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/tickets/wallet/${publicKey.toString()}`);
+      if (!response.ok) throw new Error('Failed to fetch tickets');
+      
+      const tickets = await response.json();
+      // Organize tickets by raffle ID
+      const ticketsByRaffle = tickets.reduce((acc, ticket) => {
+        acc[ticket.raffleId] = [...(acc[ticket.raffleId] || []), ticket];
+        return acc;
+      }, {});
+      
+      setUserTickets(ticketsByRaffle);
+    } catch (error) {
+      console.error('Error fetching user tickets:', error);
+    }
+  };
 
   const fetchRaffles = async () => {
     try {
@@ -83,46 +103,58 @@ const Raffle = () => {
   };
 
   const calculatePrizePool = (raffle) => {
-    return (raffle.ticketsSold || 0) * raffle.costPerTicket;
+    return raffle.totalTickets * raffle.costPerTicket;
   };
 
-  const RaffleCard = ({ raffle, type }) => (
-    <Box
-      borderWidth="1px"
-      borderRadius="lg"
-      overflow="hidden"
-      p={4}
-      bg="whiteAlpha.100"
-      _hover={{ bg: 'whiteAlpha.200' }}
-    >
-      <Heading size="md" mb={2} color="green.400">
-        {raffle.name}
-      </Heading>
-      <VStack align="start" spacing={2}>
-        <Text>Cost per Ticket: {raffle.costPerTicket} SOL</Text>
-        <Text>Total Prize Pool: {calculatePrizePool(raffle)} SOL</Text>
-        <Text>Available Tickets: {raffle.ticketAmount - (raffle.ticketsSold || 0)}</Text>
-        {type !== 'ended' ? (
-          <Text>
-            Ends: {new Date(raffle.endDate).toLocaleDateString()},{' '}
-            {new Date(raffle.endDate).toLocaleTimeString()}
-          </Text>
-        ) : (
-          <Text>Winner: {raffle.winner || 'Drawing pending...'}</Text>
-        )}
-        {type !== 'ended' ? (
-          <Button
-            colorScheme="green"
-            size="sm"
-            onClick={() => handleEnterRaffle(raffle)}
-            isDisabled={!connected || raffle.ticketAmount <= (raffle.ticketsSold || 0)}
-          >
-            Enter Raffle
-          </Button>
-        ) : null}
-      </VStack>
-    </Box>
-  );
+  const RaffleCard = ({ raffle, type }) => {
+    const userTicketCount = userTickets[raffle._id]?.length || 0;
+    
+    return (
+      <Box
+        borderWidth="1px"
+        borderRadius="lg"
+        overflow="hidden"
+        p={4}
+        bg="whiteAlpha.100"
+        _hover={{ bg: 'whiteAlpha.200' }}
+      >
+        <Heading size="md" mb={2} color="green.400">
+          {raffle.name}
+        </Heading>
+        <Text fontSize="sm" color="gray.400" mb={3}>
+          {raffle.description}
+        </Text>
+        <VStack align="start" spacing={2}>
+          <Text>Cost per Ticket: {raffle.costPerTicket} SOL</Text>
+          <Text>Total Prize Pool: {calculatePrizePool(raffle)} SOL</Text>
+          <Text>Total Tickets: {raffle.totalTickets}</Text>
+          {connected && (
+            <Text color="green.400">Your Tickets: {userTicketCount}</Text>
+          )}
+          {type !== 'ended' ? (
+            <Text>
+              Ends: {new Date(raffle.endDate).toLocaleDateString()},{' '}
+              {new Date(raffle.endDate).toLocaleTimeString()}
+            </Text>
+          ) : (
+            <Text>Winner: {raffle.winner || 'Drawing pending...'}</Text>
+          )}
+          {type !== 'ended' && (
+            <Button
+              colorScheme="green"
+              size="sm"
+              onClick={() => handleEnterRaffle(raffle)}
+              isDisabled={!connected || userTicketCount >= 10}
+            >
+              {!connected ? 'Connect Wallet to Enter' : 
+               userTicketCount >= 10 ? 'Max Tickets Reached' : 
+               'Enter Raffle'}
+            </Button>
+          )}
+        </VStack>
+      </Box>
+    );
+  };
 
   const handleEnterRaffle = async (raffle) => {
     try {
@@ -233,15 +265,6 @@ const Raffle = () => {
       )}
     </HStack>
   );
-
-  if (!connected) {
-    return (
-      <Container centerContent py={10}>
-        <Heading mb={6}>Raffle System</Heading>
-        <Text mb={4}>Please connect your wallet to view and participate in raffles</Text>
-      </Container>
-    );
-  }
 
   return (
     <Container maxW="container.xl" p={4}>

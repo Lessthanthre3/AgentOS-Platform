@@ -21,7 +21,11 @@ export const updateRaffleStatuses = async () => {
     if (!response.ok) {
       throw new Error('Failed to fetch raffles');
     }
-    const raffles = await response.json();
+    const data = await response.json();
+    
+    // Handle both paginated and non-paginated responses
+    const raffles = data.raffles || data;
+    
     return raffles.map(raffle => ({
       ...raffle,
       status: getRaffleStatus(raffle)
