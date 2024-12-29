@@ -10,6 +10,7 @@ require('dotenv').config();
 const moduleRoutes = require('./routes/moduleRoutes');
 const adminRoutes = require('./routes/adminRoutes');
 const raffleRoutes = require('../routes/raffleRoutes');
+const ticketRoutes = require('../routes/ticketRoutes');
 
 const app = express();
 
@@ -93,6 +94,7 @@ app.use('/api/modules', modulesRoutes);
 app.use('/api/module', moduleRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/raffles', raffleRoutes);
+app.use('/api/tickets', ticketRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {

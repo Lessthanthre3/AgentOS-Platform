@@ -137,10 +137,11 @@ const Raffle = () => {
         return;
       }
 
-      // Check user's existing tickets for this raffle
+      // Check user's existing tickets for this raffle from the API
       const userAddress = publicKey.toString();
-      const existingTickets = JSON.parse(localStorage.getItem(`tickets_${userAddress}`) || '[]');
-      const userTicketsForRaffle = existingTickets.filter(ticket => ticket.raffleId === raffle.id);
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/tickets/raffle/${raffle.id}`);
+      const tickets = await response.json();
+      const userTicketsForRaffle = tickets.filter(ticket => ticket.walletAddress === userAddress);
 
       if (userTicketsForRaffle.length >= 10) {
         toast({
@@ -153,85 +154,64 @@ const Raffle = () => {
         return;
       }
 
-      // Create the Solana transaction
-      const transaction = new web3.Transaction().add(
-        web3.SystemProgram.transfer({
-          fromPubkey: publicKey,
-          toPubkey: RAFFLE_WALLET,
-          lamports: web3.LAMPORTS_PER_SOL * raffle.costPerTicket,
-        })
-      );
-
-      // Get the latest blockhash
+      // Create transaction
+      const connection = new web3.Connection(web3.clusterApiUrl('devnet'));
+      const transaction = new web3.Transaction();
+      
+      // Add transfer instruction
+      const transferInstruction = web3.SystemProgram.transfer({
+        fromPubkey: publicKey,
+        toPubkey: new web3.PublicKey(process.env.NEXT_PUBLIC_TREASURY_WALLET),
+        lamports: web3.LAMPORTS_PER_SOL * raffle.costPerTicket,
+      });
+      
+      transaction.add(transferInstruction);
+      
+      // Sign and send transaction
       const { blockhash } = await connection.getLatestBlockhash();
       transaction.recentBlockhash = blockhash;
       transaction.feePayer = publicKey;
+      
+      const signed = await window.solana.signTransaction(transaction);
+      const signature = await connection.sendRawTransaction(signed.serialize());
+      await connection.confirmTransaction(signature);
 
-      // Request signature from Phantom wallet
-      try {
-        const signedTransaction = await window.solana.signTransaction(transaction);
-        const signature = await connection.sendRawTransaction(signedTransaction.serialize());
-        await connection.confirmTransaction(signature);
-
-        // Generate a unique ticket ID
-        const ticketId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-
-        // Create new ticket
-        const newTicket = {
-          ticketId,
+      // Purchase ticket through API
+      const ticketResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/tickets/purchase`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
           raffleId: raffle.id,
-          purchaseDate: new Date().toISOString(),
-          userAddress,
+          walletAddress: userAddress,
           transactionSignature: signature,
-        };
+        }),
+      });
 
-        // Add to user's tickets
-        const updatedTickets = [...existingTickets, newTicket];
-        localStorage.setItem(`tickets_${userAddress}`, JSON.stringify(updatedTickets));
-
-        // Update raffle's sold tickets count
-        const allRaffles = JSON.parse(localStorage.getItem('activeRaffles') || '[]');
-        const updatedRaffles = allRaffles.map(r => {
-          if (r.id === raffle.id) {
-            return {
-              ...r,
-              ticketsSold: (r.ticketsSold || 0) + 1,
-            };
-          }
-          return r;
-        });
-        localStorage.setItem('activeRaffles', JSON.stringify(updatedRaffles));
-
-        toast({
-          title: 'Success!',
-          description: `You've entered the raffle! Your ticket ID is: ${ticketId}`,
-          status: 'success',
-          duration: 5000,
-          isClosable: true,
-        });
-
-        // Refresh the raffles display
-        fetchRaffles();
-      } catch (err) {
-        if (err.code === 4001) {
-          toast({
-            title: 'Transaction Cancelled',
-            description: 'You cancelled the transaction',
-            status: 'info',
-            duration: 3000,
-            isClosable: true,
-          });
-        } else {
-          throw err;
-        }
+      if (!ticketResponse.ok) {
+        throw new Error('Failed to purchase ticket');
       }
+
+      const newTicket = await ticketResponse.json();
+
+      toast({
+        title: 'Success!',
+        description: `Successfully purchased ticket #${newTicket.ticketNumber}`,
+        status: 'success',
+        duration: 5000,
+        isClosable: true,
+      });
+
+      // Refresh raffle data
+      fetchRaffles();
     } catch (error) {
       console.error('Error entering raffle:', error);
       toast({
         title: 'Error',
-        description: 'Failed to enter raffle: ' + error.message,
+        description: 'Failed to enter raffle. Please try again.',
         status: 'error',
-        duration: 3000,
+        duration: 5000,
         isClosable: true,
       });
     }
