@@ -8,7 +8,7 @@ const modulesRoutes = require('../routes/modules');
 require('dotenv').config();
 
 const moduleRoutes = require('./routes/moduleRoutes');
-const adminRoutes = require('./routes/adminRoutes');
+const adminRoutes = require('../routes/adminRoutes');
 const raffleRoutes = require('../routes/raffleRoutes');
 const ticketRoutes = require('../routes/ticketRoutes');
 
